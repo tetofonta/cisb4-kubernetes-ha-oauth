@@ -1,0 +1,26 @@
+{
+  "CN": "vault.cisb.local",
+  "key": {
+    "algo": "ecdsa",
+    "size": 256
+  },
+  "names": [
+  {
+    "C": "IT",
+    "L": "UniBS",
+    "O": "IEEE Student Branch 1019",
+    "OU": "Vault",
+    "ST": "Italy"
+  }
+  ],
+  "hosts": [
+    "cisb-node-1.cisb.local",
+    "cisb-node-2.cisb.local",
+    "cisb-node-3.cisb.local",
+    "cisb-node-1",
+    "cisb-node-2",
+    "cisb-node-3",
+    "localhost",
+    "127.0.0.1"
+  ]
+}

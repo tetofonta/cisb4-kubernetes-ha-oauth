@@ -1,0 +1,30 @@
+#cloud-config
+
+
+groups:
+    - admin
+    - k3s
+
+users:
+    - default
+    - name: stefano
+      sudo: ALL=(ALL) NOPASSWD:ALL
+      groups: users, admin, wheel, k3s
+      lock_passwd: true
+      ssh_authorized_keys:
+        - ecdsa-sha2-nistp521 AAAAE2VjZHNhLXNoYTItbmlzdHA1MjEAAAAIbmlzdHA1MjEAAACFBAB0keydUL/FLVFh5CtCY2HEASNOHI7TXyDUFZEiEmG71bCP+kMN73q6GldtSDKtXJ11BpPgt8VhlM6o0HqVOY0PigB833GNQAXjRh9hdtKvrG0+UtxUhvnk9g629s/gyDc1FrI9DRzFqAOorI5O/+J618tvelCrwaDkTGsExS9wlzD1/Q== cardno:23 602 847
+
+package_upgrade: true
+
+manage-resolv-conf: true
+
+resolv_conf:
+  nameservers: ['8.8.4.4', '8.8.8.8']
+  searchdomains:
+    - cisb.local
+  domain: cisb.local
+  options:
+    rotate: true
+    timeout: 1
+
+preserve_hostname: false

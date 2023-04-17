@@ -1,0 +1,19 @@
+{
+  "CN": "CISB Infrastructure CA",
+  "key": {
+    "algo": "ecdsa",
+    "size": 256
+  },
+  "names": [
+    {
+      "C": "IT",
+      "L": "UniBS",
+      "O": "IEEE Student Branch 1019",
+      "OU": "IEEE STB1019 CISB Infrastructure CA",
+      "ST": "Italy"
+    }
+  ],
+  "ca": {
+    "expiry": "42720h"
+  }
+}
