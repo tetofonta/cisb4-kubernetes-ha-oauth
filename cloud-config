@@ -15,6 +15,8 @@ users:
         - ecdsa-sha2-nistp521 AAAAE2VjZHNhLXNoYTItbmlzdHA1MjEAAAAIbmlzdHA1MjEAAACFBAB0keydUL/FLVFh5CtCY2HEASNOHI7TXyDUFZEiEmG71bCP+kMN73q6GldtSDKtXJ11BpPgt8VhlM6o0HqVOY0PigB833GNQAXjRh9hdtKvrG0+UtxUhvnk9g629s/gyDc1FrI9DRzFqAOorI5O/+J618tvelCrwaDkTGsExS9wlzD1/Q== cardno:23 602 847
 
 package_upgrade: true
+packages:
+  - nano
 
 manage-resolv-conf: true
 
@@ -26,5 +28,8 @@ resolv_conf:
   options:
     rotate: true
     timeout: 1
+
+runcmd:
+  - reboot
 
 preserve_hostname: false
