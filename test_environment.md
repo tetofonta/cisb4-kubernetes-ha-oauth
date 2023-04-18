@@ -18,7 +18,7 @@ mkdir data
 for i in {1..3}; do cp ./Rocky*.qcow2 "./data/node-$i.qcow2"; done
 
 sudo virsh net-start default
-for i in {1..3}; do cp ./cloud-config "./data/cloud-config-$i"; echo "hostname: cisb-node-$i.cisb.local" >> "./data/cloud-config-$i"; echo "fqdn: cisb-node-$i.cisb.local" >> "./data/cloud-config-$i"; cloud-localds "./data/cloudinit-$i.iso" "./data/cloud-config-$i"; sudo virt-install --name "cisb-node-$i" --disk "./data/node-$i.qcow2",device=disk,bus=virtio --disk "./data/cloudinit-$i.iso",device=cdrom --os-variant="rocky9" --virt-type kvm --graphics none --vcpus 2 --memory 2048 --network network=default,model=virtio --console pty,target_type=serial --import; done
+for i in {1..3}; do cp ./cloud-config "./data/cloud-config-$i"; echo "hostname: cisb-node-$i.cisb.local" >> "./data/cloud-config-$i"; echo "fqdn: cisb-node-$i.cisb.local" >> "./data/cloud-config-$i"; cloud-localds "./data/cloudinit-$i.iso" "./data/cloud-config-$i"; sudo virt-install --name "cisb-node-$i" --disk "./data/node-$i.qcow2",device=disk,bus=virtio --disk "./data/cloudinit-$i.iso",device=cdrom --os-variant="rocky9" --virt-type kvm --graphics none --vcpus 2 --memory 3072 --network network=default,model=virtio --console pty,target_type=serial --import; done
 
 #check ips
 sudo virsh net-dhcp-leases default 
@@ -26,8 +26,10 @@ sudo virsh net-dhcp-leases default
 
 ### Setup host resolv conf
 ```bash
-sudo virsh net-dhcp-leases default | grep cisb-node | sed 's/  */ /g' | cut -d ' ' -f 6,7 | sed 's/\/24//g' | sed -r 's/ (.*)$/ \1 \1.cisb.local/g' | sudo tee /etc/hosts
+sudo virsh net-dhcp-leases default | grep cisb-node | sed 's/  */ /g' | cut -d ' ' -f 6,7 | sed 's/\/24//g' | sed -r 's/ (.*)$/ \1 \1.cisb.local/g'
 ```
+
+then add domain resolution for cisb.local, vlt.cisb.local, sql.cisb.local and sso.cisb.local
 
 ### Step 3: Deploy distributed vault
 #### Create the root ca with cfssl
@@ -46,24 +48,24 @@ cat CA/out/infrastructure.ca/infrastructure.ca.pem CA/out/root.ca/root.ca.pem > 
 ```
 
 #### On all the nodes
+Setup /etc/hosts as for main host
 
 start python webserver on the host
-`python -m http.server`
+`python -m http.server &`
 
 ```bash
 #Download and trust root ca
 curl --silent 'http://192.168.122.1:8000/CA/out/root.ca/root.ca.pem' | sudo tee /etc/pki/ca-trust/source/anchors/root.ca.pem
-curl --silent 'http://192.168.122.1:8000/CA/out/infrastructure.ca/infrastructure.ca.pem' | sudo tee /etc/pki/ca-trust/source/anchors/infrastructure.ca.pem
 sudo update-ca-trust extract
 
 #install vault
 sudo dnf install -y dnf-utils
-sudo dnf config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
-sudo dnf install vault
+sudo dnf config-manager -y --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+sudo dnf install vault -y
 
 #copy config and certificates
-curl --silent 'http://192.168.122.1:8000/vault/vault.hcl' | sed "s/cisb-node-x/$(hostname | cut -d '.' -f 1)/g" | sudo tee /etc/vault.d/vault.hcl
-curl --silent 'http://192.168.122.1:8000/CA/out/certs/vault/vault.cisb.local.pem' | sudo tee /opt/vault/tls/vault.cisb.local.pem
+curl --silent 'http://192.168.122.1:8000/vault_cfg/vault.hcl' | sed "s/cisb-node-x/$(hostname | cut -d '.' -f 1)/g" | sudo tee /etc/vault.d/vault.hcl
+curl --silent 'http://192.168.122.1:8000/CA/out/certs/vault/vault.cisb.local-fullchain.pem' | sudo tee /opt/vault/tls/vault.cisb.local-fullchain.pem
 curl --silent 'http://192.168.122.1:8000/CA/out/certs/vault/vault.cisb.local-key.pem' | sudo tee /opt/vault/tls/vault.cisb.local-key.pem
 curl --silent 'http://192.168.122.1:8000/CA/out/certs/vault/vault.cisb.local-ca.pem' | sudo tee /opt/vault/tls/vault.cisb.local-ca.pem
 
@@ -74,70 +76,79 @@ vault status
 ```
 
 On node 1 `vault operator init -key-shares 1 -key-threshold 1`
-then wait for sync and then operator unseal after 
+then wait for sync and then operator unseal all nodes after 
 ```
 export VAULT_TOKEN=""
 vault operator raft list-peers
 ```
 
-Unseal Key 1: tzZ4YvRR3FyB/sFwD85UE5jwa8N1ys+2zDJw9ASXL58=
-Initial Root Token: hvs.WNz82j6QBLIVx2GfkTDs08QI
+Unseal Key 1: ZUFptFjoYrcdP3Laqm95KPidbDv1G4c+mrKAOmq4K7A=
+Initial Root Token: hvs.j0aETCwuxCP2Cq53f6UYEHCL
+
+### create intermediate ca
+
+We can now work on the host =)
+First download vault
+```bash
+wget https://releases.hashicorp.com/vault/1.13.1/vault_1.13.1_linux_amd64.zip
+unzip vault_*.zip
+rm vault_*.zip
+chmod +x vault
+```
+
+```bash
+export VAULT_TOKEN="hvs.j0aETCwuxCP2Cq53f6UYEHCL"
+export VAULT_ADDR="https://vlt.cisb.local:8200"
+export VAULT_CACERT="$PWD/CA/out/root.ca/root.ca.pem"
+./vault secrets enable pki
+./vault secrets tune -max-lease-ttl=43800h pki
+./vault write -format=json pki/intermediate/generate/internal common_name="CISB IEEESTB 1019 intermediate CA" issuer_name="cisb-intermediate-ca" | jq -r '.data.csr' > pki_intermediate.csr
+cfssl sign -ca CA/out/root.ca/root.ca.pem -ca-key CA/out/root.ca/root.ca-key.pem -config CA/cfssl.json -profile intermediate pki_intermediate.csr | cfssljson -bare CA/out/intermediate.ca/intermediate.ca
+cat CA/out/intermediate.ca/intermediate.ca.pem CA/out/root.ca/root.ca.pem > CA/out/intermediate.ca/intermediate.ca-fullchain.pem
+./vault write pki/intermediate/set-signed certificate=@CA/out/intermediate.ca/intermediate.ca-fullchain.pem
+rm pki_intermediate.csr
+```
+
+### create subintermediates cas
+
+```bash
+./vault secrets enable -path=pki_db pki
+./vault secrets tune -max-lease-ttl=43800h pki_db
+./vault write -format=json pki_db/intermediate/generate/internal common_name="CISB DB CA" key_type="ec" key_bits=256  | jq -r '.data.csr' > pki_db.csr
+./vault write -format=json pki/root/sign-intermediate csr=@pki_db.csr format=pem_bundle ttl="43800h" | jq -r '.data.certificate' > db.cert.pem
+./vault write pki_db/intermediate/set-signed certificate=@db.cert.pem
+rm db.cert.pem pki_db.csr
+./vault write pki_db/roles/server allowed_domains="cisb.local,localhost" allow_subdomains=true allow_bare_domains=true allow_glob_domains=true max_ttl="720h" server_flag=true client_flag=false key_type=ec key_bits=256
+./vault write pki_db/roles/client allow_subdomains=true allow_bare_domains=true allow_glob_domains=true max_ttl="720h" allow_any_name=true enforce_hostnames=false server_flag=false client_flag=true key_type=ec key_bits=256
+
+./vault secrets enable -path=pki_http pki
+./vault secrets tune -max-lease-ttl=43800h pki_http
+./vault write -format=json pki_http/intermediate/generate/internal common_name="CISB HTTP CA" key_type="ec" key_bits=256 | jq -r '.data.csr' > pki_http.csr
+./vault write -format=json pki/root/sign-intermediate csr=@pki_http.csr format=pem_bundle ttl="43800h" | jq -r '.data.certificate' > pki_http.cert.pem
+./vault write pki_http/intermediate/set-signed certificate=@pki_http.cert.pem
+rm pki_http.cert.pem pki_http.csr
+./vault write pki_http/roles/server allowed_domains="cisb.local,localhost" allow_subdomains=true allow_bare_domains=true allow_glob_domains=true max_ttl="720h" server_flag=true client_flag=false key_type=ec key_bits=256
+```
 
 ### Deploy K3S
 
-update node resolv conf !!
-
 On node 1:
 ```bash
-curl -sfL https://get.k3s.io | K3S_TOKEN=SECRET sh -s - server --cluster-init --write-kubeconfig-mode 644
+curl -sfL https://get.k3s.io | K3S_TOKEN=cisbisabeautifulconference sh -s - server --cluster-init --write-kubeconfig-mode 644
 ```
 
 On other nodes
 ```bash
-curl -sfL https://get.k3s.io | K3S_TOKEN=SECRET sh -s - server --server https://cisb-node-1:6443
+curl -sfL https://get.k3s.io | K3S_TOKEN=cisbisabeautifulconference sh -s - server --server https://cisb-node-1:6443
 ```
 
-### Import cas into vault
-
+From host
 ```bash
-sudo dnf install jq
-vault secrets enable pki
-vault secrets tune -max-lease-ttl=43800h pki
-vault write -format=json pki/intermediate/generate/internal common_name="CISB IEEESTB 1019 intermediate CA" issuer_name="cisb-intermediate-ca" | jq -r '.data.csr' > pki_intermediate.csr
+mkdir .kube
+scp cisb-node-1:/etc/rancher/k3s/k3s.yaml .kube/kubeconfig.yaml
+sed -i 's/127.0.0.1/cisb-node-1.cisb.local/g' .kube/kubeconfig.yaml
+export KUBECONFIG="$PWD/.kube/kubeconfig.yaml"
 ```
-move pki_intermediate.csr and signi it with the root ca
-
-on the host
-```bash
-cfssl sign -ca CA/out/root.ca/root.ca.pem -ca-key CA/out/root.ca/root.ca-key.pem -config CA/cfssl.json -profile intermediate pki_intermediate.csr | cfssljson -bare CA/out/intermediate.ca/intermediate.ca
-cat CA/out/intermediate.ca/intermediate.ca.pem CA/out/root.ca/root.ca.pem > CA/out/intermediate.ca/intermediate.ca-fullchain.pem
-```
-
-move CA/out/intermediate.ca/intermediate.ca/intermediate.ca.pem to the node
-on the node
-```bash
-vault write pki/intermediate/set-signed certificate=@intermediate.ca.pem
-```
-set issuer name
-
-### create cas
-
-```bash
-vault secrets enable -path=pki_db pki
-vault secrets tune -max-lease-ttl=43800h pki_db
-vault write -format=json pki_db/intermediate/generate/internal common_name="CISB DB CA"  issuer_name="cisb-db-ca"  | jq -r '.data.csr' > pki_db.csr
-vault write -format=json pki/root/sign-intermediate issuer_ref="cisb-intermediate-ca" csr=@pki_db.csr format=pem_bundle ttl="43800h" | jq -r '.data.certificate' > db.cert.pem
-vault write pki_db/intermediate/set-signed certificate=@db.cert.pem
-!!! roles
-vault write pki_db/roles/server issuer_ref="$(vault read -field=default pki_int/config/issuers)" allowed_domains="cisb.local,localhost" allow_subdomains=true max_ttl="720h"
-
-vault secrets enable -path=pki_http pki
-vault secrets tune -max-lease-ttl=43800h pki_http
-vault write -format=json pki_http/intermediate/generate/internal common_name="CISB HTTP CA"  issuer_name="cisb-http-ca"  | jq -r '.data.csr' > pki_http.csr
-vault write -format=json pki/root/sign-intermediate issuer_ref="cisb-intermediate-ca" csr=@pki_http.csr format=pem_bundle ttl="43800h" | jq -r '.data.certificate' > pki_http.cert.pem
-vault write pki_http/intermediate/set-signed certificate=@pki_http.cert.pem
-```
-set issuer name
 
 ### Deploy cert-manager
 
@@ -145,14 +156,24 @@ set issuer name
 helm repo add jetstack https://charts.jetstack.io
 helm repo update
 helm install  cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.11.0 --set installCRDs=true
-
-
 ```
 
-### Deploy postgres
+deploy issuers
+
+```bash
+cp k3s/cert-manager-cluster-issuer.template.yaml k3s/cert-manager-cluster-issuer.yaml
+sed -i "s/TOKEN/$(echo ${VAULT_TOKEN} | base64 -w0)/" k3s/cert-manager-cluster-issuer.yaml
+sed -i "s/CABUNDLE/$(cat CA/out/root.ca/root.ca.pem | base64 -w0)/" k3s/cert-manager-cluster-issuer.yaml
+kubectl apply -f k3s/cert-manager-cluster-issuer.yaml
+kubectl get clusterissuer
+```
+
+### Deploy authelia
+
+
+# schifo
 
 create certificate
-
 
 https://kubernetes.io/docs/reference/access-authn-authz/authentication/
 https://docs.k3s.io/cli/server#customized-flags-for-kubernetes-processes

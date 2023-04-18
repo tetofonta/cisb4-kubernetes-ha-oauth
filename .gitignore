@@ -2,3 +2,7 @@
 out/
 data/
 *.iso
+.kube/
+vault
+pgo
+postgres-operator-examples/

@@ -14,6 +14,7 @@
   }
   ],
   "hosts": [
+    "vault.cisb.local",
     "cisb-node-1.cisb.local",
     "cisb-node-2.cisb.local",
     "cisb-node-3.cisb.local",

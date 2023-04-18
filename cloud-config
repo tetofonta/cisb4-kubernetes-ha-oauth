@@ -1,6 +1,5 @@
 #cloud-config
 
-
 groups:
     - admin
     - k3s
