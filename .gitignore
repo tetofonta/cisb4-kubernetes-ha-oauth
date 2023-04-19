@@ -6,3 +6,5 @@ data/
 vault
 pgo
 postgres-operator-examples/
+hosts
+nfs/

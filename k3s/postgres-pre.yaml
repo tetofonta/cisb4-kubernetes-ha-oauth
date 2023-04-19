@@ -1,0 +1,38 @@
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: psql
+
+---
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: postgres-tls
+  namespace: psql
+spec:
+  secretName: postgres-tls
+  duration: 2160h
+  renewBefore: 360h
+  subject:
+    organizations:
+      - ieee stb 1019
+  commonName: sql.cisb.local
+  isCA: false
+  privateKey:
+    algorithm: ECDSA
+    encoding: PKCS1
+    size: 256
+  usages:
+    - server auth
+  dnsNames:
+    - sql.cisb.local
+    - cisb-node-1.cisb.local
+    - cisb-node-2.cisb.local
+    - cisb-node-3.cisb.local
+    - localhost
+  ipAddresses:
+    - 127.0.0.1
+  issuerRef:
+    name: db-vault-server-issuer
+    kind: ClusterIssuer

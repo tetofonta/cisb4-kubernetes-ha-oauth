@@ -26,10 +26,10 @@ sudo virsh net-dhcp-leases default
 
 ### Setup host resolv conf
 ```bash
-sudo virsh net-dhcp-leases default | grep cisb-node | sed 's/  */ /g' | cut -d ' ' -f 6,7 | sed 's/\/24//g' | sed -r 's/ (.*)$/ \1 \1.cisb.local/g'
+sudo virsh net-dhcp-leases default | grep cisb-node | sed 's/  */ /g' | cut -d ' ' -f 6,7 | sed 's/\/24//g' | sed -r 's/ (.*)$/ \1 \1.cisb.local/g' > ./hosts
+export HOSTALIASES=$PWD/hosts
 ```
-
-then add domain resolution for cisb.local, vlt.cisb.local, sql.cisb.local and sso.cisb.local
+then add domain resolution for cisb.local, vlt.cisb.local, sql.cisb.local, kube.cisb.local and sso.cisb.local
 
 ### Step 3: Deploy distributed vault
 #### Create the root ca with cfssl
@@ -48,8 +48,6 @@ cat CA/out/infrastructure.ca/infrastructure.ca.pem CA/out/root.ca/root.ca.pem > 
 ```
 
 #### On all the nodes
-Setup /etc/hosts as for main host
-
 start python webserver on the host
 `python -m http.server &`
 
@@ -139,7 +137,7 @@ curl -sfL https://get.k3s.io | K3S_TOKEN=cisbisabeautifulconference sh -s - serv
 
 On other nodes
 ```bash
-curl -sfL https://get.k3s.io | K3S_TOKEN=cisbisabeautifulconference sh -s - server --server https://cisb-node-1:6443
+curl -sfL https://get.k3s.io | K3S_TOKEN=cisbisabeautifulconference sh -s - server --server https://cisb-node-1.cisb.local:6443
 ```
 
 From host
@@ -168,8 +166,34 @@ kubectl apply -f k3s/cert-manager-cluster-issuer.yaml
 kubectl get clusterissuer
 ```
 
+### Deploy storage class on ha storage
+
+on host, deploy nfs
+```bash
+mkdir nfs
+```
+
+add export line to /etc/exports
+
+reload
+`sudo exportfs -arv`
+
+```bash
+helm repo add nfs-subdir-external-provisioner https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner
+helm install nfs-subdir-external-provisioner nfs-subdir-external-provisioner/nfs-subdir-exter
+nal-provisioner --create-namespace --namespace nfs-provisioner  --set nfs.server=192.168.122.1 --set nfs.path=/home/stefano/Projects/IEEE/cisb4-kubernetes-ha-oauth/nfs
+```
+
+### Deploy postgres
+
+```bash
+kubectl apply -f k3s/postgres.yaml
+
+```
+
 ### Deploy authelia
 
+todo
 
 # schifo
 
