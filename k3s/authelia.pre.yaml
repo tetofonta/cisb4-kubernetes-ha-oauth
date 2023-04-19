@@ -1,0 +1,106 @@
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: sso
+
+---
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: sso-db-tls
+  namespace: sso
+spec:
+  secretName: sso-tls
+  duration: 2160h
+  renewBefore: 360h
+  subject:
+    organizations:
+      - ieee stb 1019
+  commonName: sso.cisb.local
+  isCA: false
+  privateKey:
+    algorithm: ECDSA
+    encoding: PKCS1
+    size: 256
+  usages:
+    - client auth
+  dnsNames:
+    - sso.cisb.local
+    - cisb-node-1.cisb.local
+    - cisb-node-2.cisb.local
+    - cisb-node-3.cisb.local
+    - localhost
+  ipAddresses:
+    - 127.0.0.1
+  issuerRef:
+    name: db-vault-client-issuer
+    kind: ClusterIssuer
+
+---
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: sso-auth
+  namespace: sso
+spec:
+  secretName: sso-auth
+  duration: 2160h
+  renewBefore: 360h
+  subject:
+    organizations:
+      - ieee stb 1019
+  commonName: sso.cisb.local
+  isCA: false
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 4096
+  usages:
+    - client auth
+  dnsNames:
+    - sso.cisb.local
+    - cisb-node-1.cisb.local
+    - cisb-node-2.cisb.local
+    - cisb-node-3.cisb.local
+    - localhost
+  ipAddresses:
+    - 127.0.0.1
+  issuerRef:
+    name: auth-vault-server-issuer
+    kind: ClusterIssuer
+
+---
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: sso-http-tls
+  namespace: sso
+spec:
+  secretName: sso-http
+  duration: 2160h
+  renewBefore: 360h
+  subject:
+    organizations:
+      - ieee stb 1019
+  commonName: sso.cisb.local
+  isCA: false
+  privateKey:
+    algorithm: ECDSA
+    encoding: PKCS1
+    size: 256
+  usages:
+    - server auth
+  dnsNames:
+    - sso.cisb.local
+    - cisb-node-1.cisb.local
+    - cisb-node-2.cisb.local
+    - cisb-node-3.cisb.local
+    - localhost
+  ipAddresses:
+    - 127.0.0.1
+  issuerRef:
+    name: http-vault-server-issuer
+    kind: ClusterIssuer

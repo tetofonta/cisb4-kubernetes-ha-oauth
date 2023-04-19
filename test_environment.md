@@ -126,6 +126,14 @@ rm db.cert.pem pki_db.csr
 ./vault write pki_http/intermediate/set-signed certificate=@pki_http.cert.pem
 rm pki_http.cert.pem pki_http.csr
 ./vault write pki_http/roles/server allowed_domains="cisb.local,localhost" allow_subdomains=true allow_bare_domains=true allow_glob_domains=true max_ttl="720h" server_flag=true client_flag=false key_type=ec key_bits=256
+
+./vault secrets enable -path=pki_auth pki
+./vault secrets tune -max-lease-ttl=43800h pki_auth
+./vault write -format=json pki_auth/intermediate/generate/internal common_name="CISB Auth CA" key_type="rsa" key_bits=4096 | jq -r '.data.csr' > pki_auth.csr
+./vault write -format=json pki/root/sign-intermediate csr=@pki_auth.csr format=pem_bundle ttl="43800h" | jq -r '.data.certificate' > pki_auth.cert.pem
+./vault write pki_auth/intermediate/set-signed certificate=@pki_auth.cert.pem
+rm pki_auth.cert.pem pki_auth.csr
+./vault write pki_auth/roles/server allowed_domains="cisb.local,localhost" allow_subdomains=true allow_bare_domains=true allow_glob_domains=true max_ttl="720h" server_flag=true client_flag=false allow_any_name=true enforce_hostnames=false key_type="rsa" key_bits=4096
 ```
 
 ### Deploy K3S
@@ -174,26 +182,46 @@ mkdir nfs
 ```
 
 add export line to /etc/exports
-
-reload
-`sudo exportfs -arv`
+```bash
+echo "$PWD/nfs cisb-node-1(rw,sync,no_root_squash) cisb-node-2(rw,sync,no_root_squash) cisb-node-3(rw,sync,no_root_squash)" >> sudo tee -a /etc/exports
+sudo systemctl start nfs-server.service
+sudo exportfs -arv
+```
 
 ```bash
 helm repo add nfs-subdir-external-provisioner https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner
-helm install nfs-subdir-external-provisioner nfs-subdir-external-provisioner/nfs-subdir-exter
-nal-provisioner --create-namespace --namespace nfs-provisioner  --set nfs.server=192.168.122.1 --set nfs.path=/home/stefano/Projects/IEEE/cisb4-kubernetes-ha-oauth/nfs
+helm repo update
+helm install nfs-subdir-external-provisioner nfs-subdir-external-provisioner/nfs-subdir-external-provisioner --create-namespace --namespace nfs-provisioner  --set nfs.server=192.168.122.1 --set nfs.path=$PWD/nfs
 ```
 
 ### Deploy postgres
 
 ```bash
+kubectl apply -f k3s/postgres-pre.yaml
+#check the presence of the certificate
 kubectl apply -f k3s/postgres.yaml
-
 ```
+
+### test connection and create authelia account
+install psql tool from postgresql-libs
+```bash
+./vault write pki_db/issue/client common_name="postgres" ttl="24h" -format=json > raw
+cat raw | jq -r '.data.ca_chain[]' > pg.ca.pem
+cat raw | jq -r '.data.certificate' > pg.crt.pem
+cat raw | jq -r '.data.private_key' > pg.key.pem
+chmod 600 pg.*.pem
+psql "host=sql.cisb.local user=postgres sslcert=./pg.crt.pem sslkey=./pg.key.pem sslrootcert=./pg.ca.pem"
+```
+
+postgres=# CREATE ROLE authelia WITH LOGIN;
+postgres=# CREATE DATABASE authelia OWNER authelia;
 
 ### Deploy authelia
 
-todo
+```bash
+kubectl apply -f k3s/authelia.pre.yaml
+
+```
 
 # schifo
 

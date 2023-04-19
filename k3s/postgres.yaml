@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: postgres-conf
-  namespace: psql
+  namespace: postgres
 data:
   postgresql.conf: |
     listen_addresses = '*'
@@ -14,11 +14,11 @@ data:
     ssl_ca_file = '/etc/cert/ca.crt'
     ssl_cert_file = '/etc/cert/tls.crt'
     ssl_key_file = '/etc/cert/tls.key'
-    ssl_ciphers = 'HIGH:MEDIUM:!aNULL'
+    ssl_ciphers = 'TLSv1.2:TLSv1.3:!aNULL:!eNULL'
     ssl_prefer_server_ciphers = on
   pg_hba.conf: |
     host all all 127.0.0.1/32 trust
-    hostssl all all all cert
+    hostssl all all 0.0.0.0/0 cert clientcert=verify-full
 
 ---
 
@@ -26,7 +26,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: postgres-volume-claim
-  namespace: psql
+  namespace: postgres
 spec:
   storageClassName: nfs-client
   accessModes:
@@ -41,7 +41,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: postgres-deployment
-  namespace: psql
+  namespace: postgres
   labels:
     app: postgres
 spec:
@@ -54,6 +54,8 @@ spec:
       labels:
         app: postgres
     spec:
+      securityContext:
+        fsGroup: 70
       containers:
         - name: postgres
           image: postgres:alpine
@@ -83,7 +85,39 @@ spec:
         - name: cert
           secret:
             secretName: postgres-tls
-            defaultMode: 416
+            defaultMode: 384
         - name: data
           persistentVolumeClaim:
             claimName: postgres-volume-claim
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+  type: ClusterIP
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service-lb
+  namespace: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+  type: LoadBalancer

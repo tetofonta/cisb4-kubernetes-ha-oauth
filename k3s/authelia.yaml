@@ -1,0 +1,224 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authelia-conf
+  namespace: sso
+data:
+  configuration.yml: |
+    default_redirection_url: https://sso.cisb.local
+    server:
+      host: 0.0.0.0
+      port: 9091
+    log:
+      level: debug
+    totp:
+      issuer: cisb.local
+
+    webauthn:
+      disable: false
+      display_name: cisb sso
+      attestation_conveyance_preference: indirect
+      user_verification: preferred
+      timeout: 60s
+
+    authentication_backend:
+      file:
+        path: /config/users_database.yml
+        search:
+          email: true
+          case_insensitive: true
+        password:
+          algorithm: argon2
+          argon2:
+            variant: argon2id
+            iterations: 5
+            memory: 256
+            parallelism: 4
+            key_length: 64
+            salt_length: 32
+
+    access_control:
+      default_policy: one_factor
+
+    session:
+      name: authelia_session
+      expiration: 3600  # 1 hour
+      inactivity: 300  # 5 minutes
+      domain: sso.cisb.local
+
+    regulation:
+      max_retries: 3
+      find_time: 120
+      ban_time: 300
+
+    storage:
+      postgres:
+        host: postgres-service.postgres.svc.cluster.local
+        port: 5432
+        database: authelia
+        username: authelia
+        password: authelia
+        tls: 
+          minimum_version: TLS1.2       
+        
+    notifier:
+      disable_startup_check: false
+      filesystem:
+        filename: /tmp/notification.txt
+
+    identity_providers:
+      oidc:
+        clients:
+          - id: kubernetes
+            description: Kubernetes cluster
+            public: true
+            authorization_policy: one_factor
+            consent_mode: explicit
+            redirect_uris: 
+              - http://localhost:8000
+              - http://localhost:18000
+            scopes:
+              - openid
+              - profile
+              - groups
+              - email
+            userinfo_signing_algorithm: none
+
+  users_database.yml: |
+    users:
+      stefano:
+        disabled: false
+        displayname: "Stefano"
+        email: stefano.fontana.2000@gmail.com
+        groups:
+          - admin
+          - sso
+        password: $argon2id$v=19$m=65536,t=5,p=4$dZYBueLW326rUW3fRLbUKxiwjs2fOgISY9uHBxTsLr4$D2iELS+fthcsS8z5fE3uP52KCiiUxJBdKE/zgKOWHAwxJORMfy1YOwEWQj3oP7vzf1riflU2PwX8HejaT1XbGg
+      nonstefano:
+        disabled: false
+        displayname: "!Stefano"
+        email: me@stefanofontana.com
+        groups:
+          - viewer
+        password: $argon2id$v=19$m=65536,t=5,p=4$dZYBueLW326rUW3fRLbUKxiwjs2fOgISY9uHBxTsLr4$D2iELS+fthcsS8z5fE3uP52KCiiUxJBdKE/zgKOWHAwxJORMfy1YOwEWQj3oP7vzf1riflU2PwX8HejaT1XbGg
+
+---
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: authelia-secrets
+  namespace: sso
+type: Opaque
+data:
+  jwt_secret: Zm5OWUhFQVhhN2FqRWhLbQo=
+  storage_encryption_key: cGNlcnNzWGlFUHYzTW9yckw3RkxlM3J2V3pQamRlaEgK
+  session_secret: cW15cmY5YTRtN0xyanRveQo=
+  oidc_hmac_secret: OUx3eDNYZWJlTDNmWGhLcAo=
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authelia-deployment
+  namespace: sso
+  labels:
+    app: authelia
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: authelia
+  template:
+    metadata:
+      labels:
+        app: authelia
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: authelia
+          image: authelia/authelia:latest
+          ports:
+            - containerPort: 9091
+          volumeMounts:
+            - name: authelia-conf
+              mountPath: /config
+            - name: authelia-secrets
+              mountPath: /secrets
+            - name: authelia-tls
+              mountPath: /etc/authelia/certs
+            - name: oidc-tls
+              mountPath: /etc/authelia/oidc
+          env:
+            - name: AUTHELIA_JWT_SECRET_FILE
+              value: /secrets/jwt_secret
+            - name: AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE
+              value: /secrets/storage_encryption_key
+            - name: AUTHELIA_SESSION_SECRET_FILE
+              value: /secrets/session_secret
+            - name: AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET_FILE
+              value: /secrets/oidc_hmac_secret
+            - name: AUTHELIA_STORAGE_POSTGRES_TLS_PRIVATE_KEY_FILE
+              value: /etc/authelia/certs/tls.key
+            - name: AUTHELIA_STORAGE_POSTGRES_TLS_CERTIFICATE_CHAIN_FILE
+              value: /etc/authelia/certs/tls.crt
+            - name: AUTHELIA_IDENTITY_PROVIDERS_OIDC_ISSUER_CERTIFICATE_CHAIN_FILE
+              value: /etc/authelia/oidc/tls.crt
+            - name: AUTHELIA_IDENTITY_PROVIDERS_OIDC_ISSUER_PRIVATE_KEY_FILE
+              value: /etc/authelia/oidc/tls.key
+      volumes:
+        - name: authelia-conf
+          configMap:
+            name: authelia-conf
+        - name: authelia-secrets
+          secret:
+            secretName: authelia-secrets
+        - name: authelia-tls
+          secret:
+            secretName: sso-tls
+        - name: oidc-tls
+          secret:
+            secretName: sso-auth
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: authelia-service
+  namespace: sso
+  labels:
+    app: authelia
+spec:
+  type: ClusterIP
+  selector:
+    app: authelia
+  ports:
+    - name: authelia
+      port: 9091
+      targetPort: 9091
+
+---
+
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: sso-ingress
+  namespace: sso
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`sso.cisb.local`)
+      services:
+        - kind: Service
+          name: authelia-service
+          namespace: sso
+          port: 9091
+  tls:
+    secretName: sso-http
