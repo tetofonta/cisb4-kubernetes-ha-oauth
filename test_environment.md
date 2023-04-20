@@ -211,15 +211,16 @@ cat raw | jq -r '.data.certificate' > pg.crt.pem
 cat raw | jq -r '.data.private_key' > pg.key.pem
 chmod 600 pg.*.pem
 psql "host=sql.cisb.local user=postgres sslcert=./pg.crt.pem sslkey=./pg.key.pem sslrootcert=./pg.ca.pem"
-```
-
 postgres=# CREATE ROLE authelia WITH LOGIN;
 postgres=# CREATE DATABASE authelia OWNER authelia;
+rm pg.*.pem raw
+```
 
 ### Deploy authelia
 
 ```bash
 kubectl apply -f k3s/authelia.pre.yaml
+kubectl apply -f k3s/authelia.yaml
 
 ```
 

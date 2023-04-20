@@ -17,7 +17,7 @@ spec:
   subject:
     organizations:
       - ieee stb 1019
-  commonName: sso.cisb.local
+  commonName: authelia
   isCA: false
   privateKey:
     algorithm: ECDSA

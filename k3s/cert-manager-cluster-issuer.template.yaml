@@ -67,7 +67,7 @@ metadata:
   namespace: cert-manager
 spec:
   vault:
-    path: pki_auth/sign/server
+    path: pki_http/sign/server
     server: https://cisb-node-1:8200
     caBundle: CABUNDLE
     auth:

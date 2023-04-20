@@ -59,7 +59,11 @@ data:
         username: authelia
         password: authelia
         tls: 
+          server_name: sql.cisb.local
           minimum_version: TLS1.2       
+    
+    certificates_directory: /config/cacerts
+    default_2fa_method: webauthn
         
     notifier:
       disable_startup_check: false
@@ -153,6 +157,8 @@ spec:
               mountPath: /etc/authelia/certs
             - name: oidc-tls
               mountPath: /etc/authelia/oidc
+            - name: authelia-tls-ca
+              mountPath: /config/cacerts
           env:
             - name: AUTHELIA_JWT_SECRET_FILE
               value: /secrets/jwt_secret
@@ -180,6 +186,17 @@ spec:
         - name: authelia-tls
           secret:
             secretName: sso-tls
+            items:
+              - key: "tls.crt"
+                path: "tls.crt"
+              - key: "tls.key"
+                path: "tls.key"
+        - name: authelia-tls-ca
+          secret:
+            secretName: sso-tls
+            items:
+              - key: "ca.crt"
+                path: "ca.crt"
         - name: oidc-tls
           secret:
             secretName: sso-auth
