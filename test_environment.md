@@ -221,9 +221,46 @@ rm pg.*.pem raw
 ```bash
 kubectl apply -f k3s/authelia.pre.yaml
 kubectl apply -f k3s/authelia.yaml
-
 ```
 
+test sso service
+
+### Configure the cluster
+
+On all nodes
+```bash
+sudo systemctl stop k3s
+```
+
+Add `--kube-apiserver-arg 'oidc-issuer-url=https://sso.cisb.local' --kube-apiserver-arg 'oidc-client-id=kubernetes' --kube-apiserver-arg 'oidc-username-claim=email' --kube-apiserver-arg 'oidc-groups-claim=groups'` after the main command in /etc/systemd/system/k3s.service for all nodes
+
+on host
+```bash
+kubectl apply -f k3s/rbac.yaml
+kubectl oidc-login setup --oidc-issuer-url=https://sso.cisb.local --oidc-client-id=kubernetes --oidc-extra-scope=email,groups --certificate-authority "$PWD/CA/out/root.ca/root.ca.pem"
+```
+
+create new kubectl file omitting users and changing username to default
+
+
+```bash
+export KUBECONFIG=$PWD/.kube/oidcadmin.yaml
+kubectl config set-credentials default \
+          --exec-api-version=client.authentication.k8s.io/v1beta1 \
+          --exec-command=kubectl \
+          --exec-arg=oidc-login \
+          --exec-arg=get-token \
+          --exec-arg=--oidc-issuer-url=https://sso.cisb.local \
+          --exec-arg=--oidc-client-id=kubernetes \
+          --exec-arg=--oidc-extra-scope=email \
+          --exec-arg=--oidc-extra-scope=groups \
+          --exec-arg=--certificate-authority=/home/stefano/Projects/IEEE/cisb4-kubernetes-ha-oauth/CA/out/root.ca/root.ca.pem
+```
+
+try using the kubectl
+then ```bash
+rm -r ~/.kube/cache/oidc-login
+```
 # schifo
 
 create certificate

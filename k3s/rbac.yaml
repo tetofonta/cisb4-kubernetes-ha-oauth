@@ -1,0 +1,65 @@
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: oidc-cluster-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: Group
+    name: admin
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: default
+  name: restricted-user
+rules:
+  - apiGroups: [""] # "" indicates the core API group
+    resources: ["pods", "services"]
+    verbs: ["get", "watch", "list"]
+
+---
+
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: oidc-cluster-user
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: restricted-user
+subjects:
+  - kind: Group
+    name: viewer
+    
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: sso
+  name: restricted-user-sso
+rules:
+  - apiGroups: [""] # "" indicates the core API group
+    resources: ["pods", "services"]
+    verbs: ["get", "watch", "list"]
+
+---
+
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: oidc-cluster-user-sso-namespace
+  namespace: sso
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: restricted-user-sso
+subjects:
+  - kind: Group
+    name: viewer
